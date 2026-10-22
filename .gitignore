@@ -1,0 +1,33 @@
+# 构建产物
+bench/build/
+build/
+*.elf
+*.so
+*.o
+*.a
+**/__pycache__/
+*.pyc
+
+# core dump（跑基准时 python 段错误留下的，别提交）
+core.*
+
+# Xcode / iOS
+Payload/
+*.ipa
+*.xcarchive
+DerivedData/
+xcuserdata/
+*.moved-aside
+
+# 第三方源码（Unicorn 在 CI 里现拉）
+third_party/
+extern/
+unicorn/
+
+# 目标游戏二进制 / 资源，一律不入库
+*.exe
+*.dll
+assets/
+Game/
+
+.DS_Store

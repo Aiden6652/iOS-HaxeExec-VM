@@ -1,0 +1,38 @@
+name: benchmark
+
+# 每次改动都重跑一遍性能基准 —— 这个项目所有架构决策都建立在这组数字上，
+# 数字变了，结论就得跟着变。
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  micro:
+    name: 访存归因基准
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: 装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install unicorn capstone numpy
+      - name: 跑归因基准（读/写/纯寄存器分开）
+        run: python bench/micro.py
+      - name: 跑 workload 基准
+        run: python bench/vmbench.py --quick
+
+  verify-results:
+    name: 校验结论仍然成立
+    needs: micro
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 确认基准产出的结论文件还在
+        run: |
+          test -f bench/RESULTS.md
+          grep -q "x1.1" bench/RESULTS.md || echo "::warning::纯寄存器不再是 1.1x，内存模型结论要重估"

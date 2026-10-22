@@ -1,0 +1,89 @@
+name: build-ipa
+
+# 产出两样东西：
+#   1) iOS 真机 arm64 的 Unicorn 静态库 —— 整个项目的地基，先验证它编得出来
+#   2) 未签名 IPA（App 层写完会自动打包；未写完则该步跳过并报警）
+#
+# 关于签名：GitHub Actions 上没有你的 Apple 账号，产出的 IPA 一律是未签名的。
+# 装到设备上之前需要你自己重签（SideStore / AltStore / 开发者证书均可）。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deployment_target:
+        description: "最低 iOS 版本"
+        required: false
+        default: "15.0"
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 装构建工具
+        run: |
+          brew install cmake ninja
+          xcode-select -p
+          xcrun --sdk iphoneos --show-sdk-path
+
+      - name: 拉 Unicorn 源码
+        run: ./scripts/fetch-unicorn.sh
+
+      - name: 交叉编译 Unicorn（iOS 真机 / arm64）
+        run: |
+          cmake -G Ninja -B build-unicorn-ios -S unicorn \
+            -DCMAKE_TOOLCHAIN_FILE="$PWD/cmake/toolchains/ios.toolchain.cmake" \
+            -DPLATFORM=OS64 \
+            -DDEPLOYMENT_TARGET="${{ inputs.deployment_target || '15.0' }}" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DUNICORN_BUILD_SHARED=OFF
+          ninja -C build-unicorn-ios
+
+      - name: 确认静态库落地
+        run: |
+          find build-unicorn-ios -name "libunicorn*.a" -print -exec lipo -info {} \;
+          test -n "$(find build-unicorn-ios -name 'libunicorn*.a' -print -quit)" \
+            || { echo "::error::Unicorn 静态库没编出来"; exit 1; }
+
+      - name: 上传 Unicorn iOS 静态库
+        uses: actions/upload-artifact@v4
+        with:
+          name: libunicorn-ios-arm64
+          path: build-unicorn-ios/libunicorn*.a
+          if-no-files-found: error
+
+      # ── App 层：platform/ios 下的宿主代码 + 游戏本体就绪后才打包 ──
+      - name: 打包未签名 IPA
+        id: ipa
+        continue-on-error: true
+        run: |
+          if [ ! -f platform/ios/build-app.sh ]; then
+            echo "::warning::platform/ios/build-app.sh 还没到位，跳过 IPA 打包"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          ./platform/ios/build-app.sh \
+            --config Release \
+            --unicorn "$PWD/build-unicorn-ios" \
+            --out "$PWD/dist/HXVM.ipa"
+          echo "skipped=false" >> "$GITHUB_OUTPUT"
+
+      - name: 上传 IPA
+        if: steps.ipa.outputs.skipped == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: HXVM-unsigned-ipa
+          path: dist/HXVM.ipa
+          if-no-files-found: error
+
+      - name: 小结
+        run: |
+          echo "### iOS 构建" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Unicorn(iOS arm64 静态库)：已产出" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.ipa.outputs.skipped }}" = "true" ]; then
+            echo "- IPA：跳过（App 层尚未提交）" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- IPA：已产出（**未签名**，装设备前需自签）" >> "$GITHUB_STEP_SUMMARY"
+          fi
