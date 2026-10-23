@@ -47,6 +47,14 @@ jobs:
           test -n "$(find build-unicorn-ios -name 'libunicorn*.a' -print -quit)" \
             || { echo "::error::Unicorn 静态库没编出来"; exit 1; }
 
+      - name: 整理成 include/ + lib/ 的标准布局
+        run: |
+          # 源码目录有 include/，静态库在构建目录 —— 合成一个 staging 供后续使用
+          mkdir -p .unicorn-stage/include .unicorn-stage/lib
+          cp -R unicorn/include/unicorn .unicorn-stage/include/
+          find build-unicorn-ios -name "libunicorn*.a" -exec cp {} .unicorn-stage/lib/ \;
+          find .unicorn-stage -maxdepth 2 | sort
+
       - name: 上传 Unicorn iOS 静态库
         uses: actions/upload-artifact@v4
         with:
@@ -59,14 +67,9 @@ jobs:
         id: ipa
         continue-on-error: true
         run: |
-          if [ ! -f platform/ios/build-app.sh ]; then
-            echo "::warning::platform/ios/build-app.sh 还没到位，跳过 IPA 打包"
-            echo "skipped=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
           ./platform/ios/build-app.sh \
             --config Release \
-            --unicorn "$PWD/build-unicorn-ios" \
+            --unicorn "$PWD/.unicorn-stage" \
             --out "$PWD/dist/HXVM.ipa"
           echo "skipped=false" >> "$GITHUB_OUTPUT"
 

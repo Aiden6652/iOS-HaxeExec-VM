@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+ "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- JIT 是这个项目存在的前提。没有 allow-jit，Unicorn 在 iOS 上
+         根本拿不到可执行内存，第一条来宾指令都翻译不出来。 -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+
+    <!-- 自签 / 个人团队必备 -->
+    <key>get-task-allow</key>
+    <true/>
+
+    <!-- 来宾映像 + 来宾堆 + 翻译缓存，内存给少了会被系统直接杀掉 -->
+    <key>com.apple.developer.kernel.increased-memory-limit</key>
+    <true/>
+</dict>
+</plist>

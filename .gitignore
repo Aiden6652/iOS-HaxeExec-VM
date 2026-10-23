@@ -14,6 +14,7 @@ core.*
 # Xcode / iOS
 Payload/
 *.ipa
+*.app
 *.xcarchive
 DerivedData/
 xcuserdata/
@@ -27,7 +28,7 @@ unicorn/
 # 目标游戏二进制 / 资源，一律不入库
 *.exe
 *.dll
-assets/
-Game/
+/Game/
+# 只忽略仓库根的 assets/，别误伤测试用的 testdata/assets/
 
 .DS_Store

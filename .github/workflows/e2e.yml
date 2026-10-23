@@ -1,0 +1,76 @@
+name: guest-e2e
+
+# 端到端：把 tests/guest_app/test_app.c 用 mingw 编成真正的 x86_64 Windows EXE，
+# 再放进这个 VM 里跑，检查它是否真的读到了大小写混乱的路径、真的分到了堆内存。
+#
+# 这是「这个 VM 到底能不能跑 Windows 程序」的唯一自动化证据。
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    name: 在 VM 里跑真 Windows EXE
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 装工具链
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            gcc-mingw-w64-x86-64 cmake ninja-build
+          python -m pip install --break-system-packages unicorn \
+            || python -m pip install unicorn
+
+      - name: 编译来宾测试程序（真 PE32+ x86-64）
+        run: |
+          mkdir -p tests/build
+          x86_64-w64-mingw32-gcc -O2 -mconsole \
+            tests/guest_app/test_app.c -o tests/build/test_app.exe
+          file tests/build/test_app.exe
+
+      - name: 编译宿主命令行工具
+        run: |
+          STAGE="$(python -c 'import unicorn,os;print(os.path.dirname(unicorn.__file__))')"
+          echo "Unicorn 位置：$STAGE"
+          cmake -G Ninja -B build -S . \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DUNICORN_ROOT="$STAGE"
+          ninja -C build
+
+      - name: 在 VM 里执行，并逐项断言
+        run: |
+          set +e
+          ./build/hxvm-cli tests/build/test_app.exe tests/testdata \
+            > /tmp/guest.log 2>/tmp/host.log
+          code=$?
+          set -e
+          echo "退出码=$code"
+          cat /tmp/guest.log
+
+          # 来宾自己 return 42，必须原样带出来
+          test "$code" = "42" || { echo "::error::退出码不是 42"; exit 1; }
+
+          # 核心能力逐条验
+          grep -q "\[OK\] 打开 Icon.PNG" /tmp/guest.log \
+            || { echo "::error::大小写混乱的路径没解析成功"; exit 1; }
+          grep -q "\[OK\] 全大写路径" /tmp/guest.log \
+            || { echo "::error::全大写路径没解析成功"; exit 1; }
+          grep -q "\[FAIL\] HeapAlloc" /tmp/guest.log \
+            && { echo "::error::HeapAlloc 失败"; exit 1; }
+          grep -q "\[OK\] 注册表 ProductName=Windows 10 Pro" /tmp/guest.log \
+            || { echo "::error::注册表没读到预置值"; exit 1; }
+          grep -q "\[OK\] 命令行" /tmp/guest.log \
+            || { echo "::error::GetCommandLineA 失败"; exit 1; }
+
+          echo "全部断言通过"
+
+      - name: 上传来宾输出
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: guest-run-log
+          path: /tmp/guest.log
