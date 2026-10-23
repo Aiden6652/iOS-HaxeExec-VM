@@ -14,10 +14,24 @@ set(DEPLOYMENT_TARGET "15.0" CACHE STRING "最低 iOS 版本")
 set(CMAKE_OSX_ARCHITECTURES arm64)
 
 if(PLATFORM STREQUAL "SIMULATORARM64")
-  set(CMAKE_OSX_SYSROOT "iphonesimulator")
+  set(_hxvm_sdk "iphonesimulator")
 else()
-  set(CMAKE_OSX_SYSROOT "iphoneos")
+  set(_hxvm_sdk "iphoneos")
 endif()
+set(CMAKE_OSX_SYSROOT "${_hxvm_sdk}")
+
+# 拿 SDK 的绝对路径，用它当 find_library / find_path 的根。
+#
+# 不这么做的话，CMake 会在 macOS 的宿主路径里找到 IOKit、CoreFoundation 这类
+# 桌面框架（iOS SDK 里根本没有 IOKit），然后把 -framework IOKit 塞进链接参数，
+# 交叉编译必然失败。Unicorn 就是踩在这个点上。
+execute_process(
+  COMMAND xcrun --sdk ${_hxvm_sdk} --show-sdk-path
+  OUTPUT_VARIABLE HXVM_IOS_SDK
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  ERROR_QUIET
+)
+set(CMAKE_FIND_ROOT_PATH "${HXVM_IOS_SDK}")
 
 set(CMAKE_C_FLAGS   "-miphoneos-version-min=${DEPLOYMENT_TARGET}" CACHE STRING "" FORCE)
 set(CMAKE_CXX_FLAGS "-miphoneos-version-min=${DEPLOYMENT_TARGET} -fno-exceptions -fno-rtti" CACHE STRING "" FORCE)
