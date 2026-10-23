@@ -16,7 +16,7 @@
 //
 // 绕法：声明一个 asm 别名指向同一个符号，代码里只用别名，
 // SDK 里那条 unavailable 声明就再也没人用了。（与 scripts/patch-unicorn-ios.sh 同源）
-extern "C" int hxvm_jit_write_protect(int enabled)
+extern "C" void hxvm_jit_write_protect(int enabled)
     __asm("_pthread_jit_write_protect_np");
 #else
 #include <pthread.h>

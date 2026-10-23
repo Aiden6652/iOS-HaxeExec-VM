@@ -23,7 +23,10 @@ if [ ! -d unicorn ]; then
   exit 1
 fi
 
-ALIAS='extern int hxvm_jit_write_protect_np(int) __asm("_pthread_jit_write_protect_np");'
+# 返回类型必须是 void：这个 API 真的不返回东西。
+# 声明成 int 的话，源码里的 `return jit_write_protect_np(...)` 会变成
+# "void function should not return a value" 的编译错误。
+ALIAS='extern void hxvm_jit_write_protect_np(int) __asm("_pthread_jit_write_protect_np");'
 
 # BSD grep 不保证支持 --include，所以用 find + xargs
 FILES=$(
