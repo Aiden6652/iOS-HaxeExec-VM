@@ -132,6 +132,21 @@ C3                   ret          ← 正常返回来宾调用者
    Win32 的 `0 == ERROR_SUCCESS`。`RegOpenKeyExA` 打开失败也返回 0 的话，
    调用方会以为成功了，然后拿一个野句柄去查值 —— 现象是「注册表静悄悄不工作」。
 
+7. **iOS SDK 把 `pthread_jit_write_protect_np` 标成 `unavailable`**
+   W^X 翻转在 iOS 上必须用它，但 Apple 标了不可用（需要 JIT 权限，不想让普通 App 能用），
+   编译期一旦使用就报 **error**（不是 warning）：
+   ```
+   tcg-apple-jit.h:112:12: error: 'pthread_jit_write_protect_np'
+   is unavailable: not available on iOS
+   ```
+   这是 iOS 上跑 TCG 绕不开的一关。符号在 libSystem 里真实存在，有 JIT 权限就能调用，
+   所以要做的只是别让编译器看见"使用"了那个名字 —— 声明一个 asm 别名指向同一符号。
+   Unicorn 源码和本项目自己的平台层各要做一份（见 `scripts/patch-unicorn-ios.sh`）。
+
+8. **macOS 自带的 bash 是 3.2，没有 `mapfile`**
+   CI 报 `exit code 127` 就是它。Apple 因为许可证问题一直不升级 bash。
+   同理 BSD grep 也不保证支持 `--include`，老实用 `find | xargs`。
+
 ---
 
 ## 渲染边界（重要）
