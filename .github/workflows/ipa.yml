@@ -64,10 +64,12 @@ jobs:
 
       - name: 整理成 include/ + lib/ 的标准布局
         run: |
-          # 源码目录有 include/，静态库在构建目录 —— 合成一个 staging 供后续使用
+          # 源码目录有 include/，静态库在构建目录 —— 合成一个 staging 供后续使用。
+          # 注意要复制全部 .a：libunicorn-static.a 只有核心代码，
+          # 各架构的 *-softmmu.a 才是 uc_open() 需要的 _uc_init_x86_64 等符号所在。
           mkdir -p .unicorn-stage/include .unicorn-stage/lib
           cp -R unicorn/include/unicorn .unicorn-stage/include/
-          find build-unicorn-ios -name "libunicorn*.a" -exec cp {} .unicorn-stage/lib/ \;
+          find build-unicorn-ios -name "*.a" -exec cp {} .unicorn-stage/lib/ \;
           find .unicorn-stage -maxdepth 2 | sort
 
       - name: 上传 Unicorn iOS 静态库
