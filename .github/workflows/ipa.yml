@@ -44,8 +44,13 @@ jobs:
             -DPLATFORM=OS64 \
             -DDEPLOYMENT_TARGET="${{ inputs.deployment_target || '15.0' }}" \
             -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_SHARED_LIBS=OFF
-          ninja -C build-unicorn-ios
+            -DBUILD_SHARED_LIBS=OFF \
+            -DUNICORN_BUILD_SAMPLES=OFF \
+            -DUNICORN_BUILD_TESTS=OFF
+          # 只构建静态库本身。构建 all 会把 Unicorn 自带的示例程序
+          # （sample_x86 / mem_apis ...）也一起链 —— 那些是 macOS 可执行文件，
+          # 在 iOS 上必然 "ld: symbol(s) not found for architecture arm64"。
+          ninja -C build-unicorn-ios unicorn
 
       # 说明：Unicorn 2.x 用的是标准的 BUILD_SHARED_LIBS，不是 v1 的
       # UNICORN_BUILD_SHARED。传错名字不会报错，只是悄悄继续构建 dylib，
