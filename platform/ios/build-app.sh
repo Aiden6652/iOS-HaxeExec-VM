@@ -77,7 +77,9 @@ echo "[build-app] 编译 main.mm"
 # ── 3) 链接 ───────────────────────────────────────────────────────────
 # libunicorn-static.a 里只有 uc.c.o 这类核心代码，
 # uc_open() 要调的 _uc_init_x86_64 等符号都在各架构的 *-softmmu.a 里 —— 必须一起链。
-# 静态库之间有循环依赖，Apple 的 ld 没有 --start-group，所以整组重复一遍。
+# 静态库之间有循环依赖（uc.c 引用各架构的 uc_init，架构库又引用 TCG 的
+# cpu_exec / load_helper）。Apple 的 ld 没有 --start-group，靠 -all_load
+# 强制把每个库的成员都拉进来才能解析完。
 UNICORN_LIBS=()
 while IFS= read -r a; do
   UNICORN_LIBS+=("$a")
@@ -92,7 +94,7 @@ echo "[build-app] 链接 ${#UNICORN_LIBS[@]} 个静态库"
 echo "[build-app] 链接 HXVM"
 "${XCRUN[@]}" "$BUILD/main.mm.o" -o "$APPDIR/HXVM" \
   "$LIBHXVM" \
-  "${UNICORN_LIBS[@]}" "${UNICORN_LIBS[@]}" \
+  -Wl,-all_load "${UNICORN_LIBS[@]}" \
   -lc++ \
   -framework UIKit -framework Foundation -framework QuartzCore \
   -framework Metal -framework CoreGraphics \
