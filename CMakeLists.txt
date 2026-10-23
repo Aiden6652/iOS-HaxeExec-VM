@@ -9,6 +9,9 @@ endif()
 
 # ── Unicorn ────────────────────────────────────────────────────────────
 # 来源优先级：UNICORN_ROOT（scripts/fetch-unicorn.sh 拉下来的）> pip 装的 > 系统
+# 交叉编译 iOS 时，toolchain 会把 find_* 的根钉在 iOS SDK 上（否则 CMake 会
+# 在 macOS 宿主路径找到 IOKit 之类的桌面框架）。但 Unicorn 是第三方依赖，
+# 它不在 SDK 里，所以这两处查找必须显式跳过 re-root，不然永远找不到。
 find_path(UNICORN_INCLUDE_DIR
   NAMES unicorn/unicorn.h
   HINTS
@@ -16,6 +19,7 @@ find_path(UNICORN_INCLUDE_DIR
     /usr/local/lib/python3.12/dist-packages/unicorn/include
     /usr/local/include
     /usr/include
+  NO_CMAKE_FIND_ROOT_PATH
 )
 find_library(UNICORN_LIBRARY
   NAMES unicorn
@@ -24,6 +28,7 @@ find_library(UNICORN_LIBRARY
     /usr/local/lib/python3.12/dist-packages/unicorn/lib
     /usr/local/lib
     /usr/lib
+  NO_CMAKE_FIND_ROOT_PATH
 )
 
 if(NOT UNICORN_INCLUDE_DIR OR NOT UNICORN_LIBRARY)
