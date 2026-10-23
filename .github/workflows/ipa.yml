@@ -46,7 +46,8 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_SHARED_LIBS=OFF \
             -DUNICORN_BUILD_SAMPLES=OFF \
-            -DUNICORN_BUILD_TESTS=OFF
+            -DUNICORN_BUILD_TESTS=OFF \
+            -DUNICORN_LEGACY_STATIC_ARCHIVE=ON
           # 只构建静态库本身。构建 all 会把 Unicorn 自带的示例程序
           # （sample_x86 / mem_apis ...）也一起链 —— 那些是 macOS 可执行文件，
           # 在 iOS 上必然 "ld: symbol(s) not found for architecture arm64"。

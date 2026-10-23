@@ -80,21 +80,33 @@ echo "[build-app] 编译 main.mm"
 # 静态库之间有循环依赖（uc.c 引用各架构的 uc_init，架构库又引用 TCG 的
 # cpu_exec / load_helper）。Apple 的 ld 没有 --start-group，靠 -all_load
 # 强制把每个库的成员都拉进来才能解析完。
+# 首选 all-in-one 的 libunicorn.a（UNICORN_LEGACY_STATIC_ARCHIVE 产出）：
+# 全部目标文件都在一个库里，既没有循环依赖，也不会重复符号 —— 最省事。
+ALL_LOAD_FLAG=""
 UNICORN_LIBS=()
-while IFS= read -r a; do
-  UNICORN_LIBS+=("$a")
-done < <(find "$UNICORN_DIR/lib" -name '*.a' -print | sort)
+ALL_IN_ONE="$(find "$UNICORN_DIR/lib" -name 'libunicorn.a' -print -quit 2>/dev/null)"
+
+if [ -n "$ALL_IN_ONE" ]; then
+  UNICORN_LIBS=("$ALL_IN_ONE")
+else
+  while IFS= read -r a; do
+    UNICORN_LIBS+=("$a")
+  done < <(find "$UNICORN_DIR/lib" -name '*.a' -print | sort)
+  # 拆分库之间有循环依赖，Apple 的 ld 默认只拉"当前需要的"成员，
+  # 得 -all_load 全量加载才能解析完
+  ALL_LOAD_FLAG="-Wl,-all_load"
+fi
 
 if [ ${#UNICORN_LIBS[@]} -eq 0 ]; then
   echo "[build-app] $UNICORN_DIR/lib 下没有静态库" >&2
   exit 1
 fi
-echo "[build-app] 链接 ${#UNICORN_LIBS[@]} 个静态库"
+echo "[build-app] 链接 ${#UNICORN_LIBS[@]} 个静态库 ${ALL_LOAD_FLAG}"
 
 echo "[build-app] 链接 HXVM"
 "${XCRUN[@]}" "$BUILD/main.mm.o" -o "$APPDIR/HXVM" \
   "$LIBHXVM" \
-  -Wl,-all_load "${UNICORN_LIBS[@]}" \
+  ${ALL_LOAD_FLAG} "${UNICORN_LIBS[@]}" \
   -lc++ \
   -framework UIKit -framework Foundation -framework QuartzCore \
   -framework Metal -framework CoreGraphics \
