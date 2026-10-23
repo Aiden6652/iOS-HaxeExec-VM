@@ -75,10 +75,23 @@ echo "[build-app] 编译 main.mm"
 "${XCRUN[@]}" "${COMMON_FLAGS[@]}" -c platform/ios/main.mm -o "$BUILD/main.mm.o"
 
 # ── 3) 链接 ───────────────────────────────────────────────────────────
+# Unicorn 2.x 的静态库叫 libunicorn-static.a —— 不是 v1 的 libunicorn.a。
+# 它还要配上 libunicorn-common.a；各架构的 *-softmmu.a 已经被打进 static 里了，
+# 再单独链会撞重复符号。
+UNICORN_LIBS=()
+for name in libunicorn-static.a libunicorn-common.a libunicorn.a; do
+  found="$(find "$UNICORN_DIR/lib" -name "$name" -print -quit 2>/dev/null)"
+  [ -n "$found" ] && UNICORN_LIBS+=("$found")
+done
+if [ ${#UNICORN_LIBS[@]} -eq 0 ]; then
+  echo "[build-app] $UNICORN_DIR/lib 下没有 Unicorn 静态库" >&2
+  exit 1
+fi
+
 echo "[build-app] 链接 HXVM"
 "${XCRUN[@]}" "$BUILD/main.mm.o" -o "$APPDIR/HXVM" \
   "$LIBHXVM" \
-  "$UNICORN_DIR/lib/libunicorn.a" \
+  "${UNICORN_LIBS[@]}" \
   -lc++ \
   -framework UIKit -framework Foundation -framework QuartzCore \
   -framework Metal -framework CoreGraphics \
