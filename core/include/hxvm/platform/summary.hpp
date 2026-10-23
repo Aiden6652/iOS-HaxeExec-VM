@@ -9,9 +9,15 @@
 #include <pthread.h>
 #include <sys/mman.h>
 #include <unistd.h>
-// pthread_jit_write_protect_np 是私有 API，声明一下即可
-extern "C" int pthread_jit_write_protect_np(int enabled);
-extern "C" int pthread_jit_write_protect_supported_np(void);
+// iOS SDK 把 pthread_jit_write_protect_np 标成了 unavailable ——
+// 它需要 com.apple.security.cs.allow-jit 权限，Apple 不希望普通 App 能用，
+// 于是编译期一旦"使用"这个名字就直接报 error（不是警告）。
+// 但符号本身在 iOS 的 libSystem 里真实存在，拿到 JIT 权限就能调用。
+//
+// 绕法：声明一个 asm 别名指向同一个符号，代码里只用别名，
+// SDK 里那条 unavailable 声明就再也没人用了。（与 scripts/patch-unicorn-ios.sh 同源）
+extern "C" int hxvm_jit_write_protect(int enabled)
+    __asm("_pthread_jit_write_protect_np");
 #else
 #include <pthread.h>
 #include <sys/mman.h>
@@ -49,7 +55,7 @@ inline void *ReserveJit(usize size) {
 inline void JitWriteProtect(bool writable) {
 #if defined(__APPLE__) && defined(__arm64__)
     // 参数含义：1 = 允许写、禁止执行；0 = 允许执行、禁止写
-    pthread_jit_write_protect_np(writable ? 1 : 0);
+    hxvm_jit_write_protect(writable ? 1 : 0);
 #else
     (void)writable;
 #endif

@@ -31,6 +31,12 @@ jobs:
       - name: 拉 Unicorn 源码
         run: ./scripts/fetch-unicorn.sh
 
+      - name: 让 Unicorn 能编到 iOS（绕开 JIT API 的可用性标注）
+        run: |
+          # iOS SDK 把 pthread_jit_write_protect_np 标为 unavailable。
+          # 它是 iOS 上跑 TCG 的必需品，有 JIT 权限就能用，只是 SDK 不让普通 App 用。
+          ./scripts/patch-unicorn-ios.sh
+
       - name: 交叉编译 Unicorn（iOS 真机 / arm64）
         run: |
           cmake -G Ninja -B build-unicorn-ios -S unicorn \
