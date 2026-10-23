@@ -10,6 +10,9 @@
 # 解法：不碰 SDK 头，只把 Unicorn 源码里的调用全部改指向一个 asm 别名，
 #   别名指向同一个符号 _pthread_jit_write_protect_np。
 #   这样 SDK 里那条 unavailable 声明就没人再"使用"，可用性检查自然不触发。
+#
+# 注意：macOS 自带的 bash 是 3.2（因为许可证问题 Apple 不升级），
+#   没有 mapfile / readarray，别用。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -22,33 +25,44 @@ fi
 
 ALIAS='extern int hxvm_jit_write_protect_np(int) __asm("_pthread_jit_write_protect_np");'
 
-# 只处理 Unicorn 自己的源码（SDK 的 pthread.h 绝不能动）
-mapfile -t FILES < <(grep -rl "pthread_jit_write_protect_np" unicorn \
-                       --include="*.c" --include="*.h" 2>/dev/null || true)
+# BSD grep 不保证支持 --include，所以用 find + xargs
+FILES=$(
+  find unicorn -type f \( -name '*.c' -o -name '*.h' \) -print0 2>/dev/null \
+    | xargs -0 grep -l 'pthread_jit_write_protect_np' 2>/dev/null || true
+)
 
-if [ ${#FILES[@]} -eq 0 ]; then
-  echo "[patch-unicorn] 没有需要修补的文件（该 Unicorn 版本可能不依赖这个 API）"
+if [ -z "$FILES" ]; then
+  echo "[patch-unicorn] 没有需要修补的文件（该版本可能不依赖这个 API）"
   exit 0
 fi
 
-for f in "${FILES[@]}"; do
+COUNT=0
+printf '%s\n' "$FILES" | while IFS= read -r f; do
+  [ -z "$f" ] && continue
   # 已经补过就跳过，保证可重复执行
-  if grep -q "hxvm_jit_write_protect_np" "$f"; then
+  if grep -q 'hxvm_jit_write_protect_np' "$f"; then
     echo "[patch-unicorn] 跳过（已修补）：$f"
     continue
   fi
 
-  # 顺序很重要：先改名（此时别名声明还没写进去，不会被误改），再插入别名声明
+  # 顺序很关键：先改名（此时别名声明还没写进去，不会被误改），再插入别名声明。
+  # 反过来会把别名里的 "_pthread_jit_write_protect_np" 一起改坏。
   python3 - "$f" "$ALIAS" <<'PY'
 import sys
 path, alias = sys.argv[1], sys.argv[2]
-src = open(path, encoding="utf-8", errors="replace").read()
+with open(path, encoding="utf-8", errors="replace") as fh:
+    src = fh.read()
 src = src.replace("pthread_jit_write_protect_np", "hxvm_jit_write_protect_np")
-# 别名声明放在最前面，保证在任何使用之前
 src = alias + "\n" + src
-open(path, "w", encoding="utf-8").write(src)
+with open(path, "w", encoding="utf-8") as fh:
+    fh.write(src)
 PY
   echo "[patch-unicorn] 已修补：$f"
+  COUNT=$((COUNT + 1))
+  echo "$COUNT" > .patch-count
 done
 
-echo "[patch-unicorn] 完成，共 ${#FILES[@]} 个文件"
+if [ -f .patch-count ]; then
+  echo "[patch-unicorn] 完成，本次修补 $(cat .patch-count) 个文件"
+  rm -f .patch-count
+fi
