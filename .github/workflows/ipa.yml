@@ -88,8 +88,11 @@ jobs:
             --out "$PWD/dist/HXVM.ipa"
           echo "skipped=false" >> "$GITHUB_OUTPUT"
 
+      # 用「文件在不在」来判断，别去依赖上一步的 output。
+      # —— output 依赖写法在 continue-on-error 的步骤上并不总是按预期工作，
+      # 结果是静态库上传了、IPA 却没上传。
       - name: 上传 IPA
-        if: steps.ipa.outputs.skipped == 'false'
+        if: ${{ hashFiles('dist/HXVM.ipa') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: HXVM-unsigned-ipa
